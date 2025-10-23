@@ -7,8 +7,30 @@
 #include <algorithm>
 #include <iostream>
 #include <sstream>
+#include <cstdlib>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <chrono>
+#include <iomanip>
 
 namespace candidate_window {
+
+// Helper function to log messages to /tmp/webview.log
+void logToFile(const std::string& message) {
+    std::ofstream logFile("/tmp/webview.log", std::ios::app);
+    if (logFile.is_open()) {
+        auto now = std::chrono::system_clock::now();
+        auto time_t = std::chrono::system_clock::to_time_t(now);
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now.time_since_epoch()) % 1000;
+        
+        logFile << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
+        logFile << "." << std::setfill('0') << std::setw(3) << ms.count();
+        logFile << " [WebviewCandidateWindow] " << message << std::endl;
+        logFile.close();
+    }
+}
 
 void to_json(nlohmann::json &j, const CandidateAction &a) {
     j = nlohmann::json{{"id", a.id}, {"text", a.text}};
@@ -386,3 +408,107 @@ void WebviewCandidateWindow::api_curl(std::string id, std::string req) {
 #endif
 
 } // namespace candidate_window
+
+
+namespace candidate_window {
+
+    WebviewCandidateWindowDecoupled::WebviewCandidateWindowDecoupled() {
+        std::string html_content;
+        
+        // Try to load from external file first
+        html_content = loadExternalWebview();
+        
+        // Fallback to embedded template if external loading fails
+        if (html_content.empty()) {
+            html_content = loadEmbeddedWebview();
+        }
+        
+        if (html_content.empty()) {
+            throw std::runtime_error("Failed to load webview content");
+        }
+        
+        setWebviewContent(html_content);
+    }
+    
+    std::string WebviewCandidateWindowDecoupled::loadExternalWebview() {
+        logToFile("Starting external webview loading process");
+        std::vector<std::string> possible_paths;
+        
+        // Check for user-defined path from environment variable
+        const char* webview_www_path = std::getenv("WEBVIEW_WWW_PATH");
+        if (webview_www_path && strlen(webview_www_path) > 0) {
+            std::string custom_path = webview_www_path;
+            logToFile("Found WEBVIEW_WWW_PATH environment variable: " + custom_path);
+            
+            // If path doesn't start with '/', treat it as relative to home directory
+            if (custom_path[0] != '/') {
+                const char* home_dir = std::getenv("HOME");
+                if (home_dir) {
+                    custom_path = std::string(home_dir) + "/" + custom_path;
+                    logToFile("Converted to absolute path: " + custom_path);
+                } else {
+                    logToFile("Warning: HOME environment variable not found, using relative path as-is");
+                }
+            }
+            
+            // Ensure the path ends with index.html if it's a directory
+            if (std::filesystem::exists(custom_path) && std::filesystem::is_directory(custom_path)) {
+                custom_path += "/index.html";
+                logToFile("Path is directory, appended index.html: " + custom_path);
+            }
+            
+            possible_paths.push_back(custom_path);
+            logToFile("Added custom path to search list: " + custom_path);
+        } else {
+            logToFile("WEBVIEW_WWW_PATH environment variable not set or empty");
+        }
+        
+        // Add default system paths
+        std::string default_path = "/Library/Input Methods/Fcitx5.app/Contents/Resources/webview/index.html";
+        possible_paths.push_back(default_path);
+        logToFile("Added default system path: " + default_path);
+        
+        logToFile("Searching through " + std::to_string(possible_paths.size()) + " possible paths");
+        
+        for (const auto& path : possible_paths) {
+            logToFile("Checking path: " + path);
+            if (std::filesystem::exists(path)) {
+                logToFile("Path exists, attempting to read file: " + path);
+                std::ifstream file(path);
+                if (file.is_open()) {
+                    std::stringstream buffer;
+                    buffer << file.rdbuf();
+                    file.close();
+                    
+                    std::string content = buffer.str();
+                    logToFile("SUCCESS: Loaded external webview from: " + path + " (size: " + std::to_string(content.size()) + " bytes)");
+                    std::cout << "Loaded external webview from: " << path << std::endl;
+                    return content;
+                } else {
+                    logToFile("Failed to open file: " + path);
+                }
+            } else {
+                logToFile("Path does not exist: " + path);
+            }
+        }
+        
+        logToFile("WARNING: No external webview files found, falling back to embedded template");
+        std::cerr << "Warning: External webview artifacts not found, falling back to embedded template" << std::endl;
+        return "";
+    }
+    
+    std::string WebviewCandidateWindowDecoupled::loadEmbeddedWebview() {
+        logToFile("Using embedded HTML template (fallback)");
+        // Use embedded HTML template
+        std::string html_template(reinterpret_cast<char *>(HTML_TEMPLATE), HTML_TEMPLATE_len);
+        logToFile("Loaded embedded template (size: " + std::to_string(html_template.size()) + " bytes)");
+        return html_template;
+    }
+    
+    void WebviewCandidateWindowDecoupled::setWebviewContent(const std::string& content) {
+        // Set the HTML content in the webview using the public method
+        set_html_content(content);
+    }
+    
+} // namespace candidate_window
+    
