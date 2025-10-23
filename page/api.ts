@@ -172,7 +172,15 @@ function setCandidates(cands: Candidate[], highlighted: number, markText: string
     }
 
     const text = div('fcitx-text')
-    text.innerHTML = escapeWS(cands[i].text)
+    // Check if the text is a valid HTML tag, if so, decode HTML entities
+    if ((cands[i].text.startsWith('<') || cands[i].text.startsWith('&lt;')) && (cands[i].text.endsWith('>') || cands[i].text.endsWith('&gt;'))) {
+      // Decode HTML entities if present
+      const decodedText = cands[i].text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+      text.innerHTML = decodedText
+    }
+    else {
+      text.innerHTML = escapeWS(cands[i].text)
+    }
     if (isSingleEmoji(cands[i].text)) {
       // Hack: for vertical-lr writing mode, 🙅‍♂️ is rotated on Safari and split to 🙅 and ♂ on Chrome.
       // Can't find a way that works for text that contains not only emoji (e.g. for preedit) but
