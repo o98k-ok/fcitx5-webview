@@ -165,6 +165,16 @@ class WebviewCandidateWindow {
     // Fetch system accent color.
     void update_accent_color();
 
+  protected:
+    // Protected method to set HTML content (for derived classes)
+    void set_html_content(const std::string& content) {
+#ifndef __EMSCRIPTEN__
+        w_->set_html(content.c_str());
+#else
+        EM_ASM(fcitx.createPanel(UTF8ToString($0)), content.c_str());
+#endif
+    }
+
   private:
 #ifndef __EMSCRIPTEN__
     std::thread::id main_thread_id_;
@@ -309,4 +319,24 @@ class WebviewCandidateWindow {
     }
 };
 
+// Forward declaration for decoupled webview
+class WebviewCandidateWindowDecoupled;
+
 } // namespace candidate_window
+
+
+
+namespace candidate_window {
+
+    class WebviewCandidateWindowDecoupled : public WebviewCandidateWindow {
+    public:
+        WebviewCandidateWindowDecoupled();
+        ~WebviewCandidateWindowDecoupled() = default;
+    
+    private:
+        std::string loadExternalWebview();
+        std::string loadEmbeddedWebview();
+        void setWebviewContent(const std::string& content);
+    };
+    
+ } // namespace candidate_window
