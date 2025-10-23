@@ -435,21 +435,12 @@ namespace candidate_window {
         std::vector<std::string> possible_paths;
         
         // Check for user-defined path from environment variable
-        const char* webview_www_path = std::getenv("WEBVIEW_WWW_PATH");
-        if (webview_www_path && strlen(webview_www_path) > 0) {
-            std::string custom_path = webview_www_path;
-            logToFile("Found WEBVIEW_WWW_PATH environment variable: " + custom_path);
+        std::string custom_path = ".local/share/fcitx5/www";
             
-            // If path doesn't start with '/', treat it as relative to home directory
-            if (custom_path[0] != '/') {
-                const char* home_dir = std::getenv("HOME");
-                if (home_dir) {
-                    custom_path = std::string(home_dir) + "/" + custom_path;
-                    logToFile("Converted to absolute path: " + custom_path);
-                } else {
-                    logToFile("Warning: HOME environment variable not found, using relative path as-is");
-                }
-            }
+        // If path doesn't start with '/', treat it as relative to home directory
+        if (custom_path[0] != '/') {
+            custom_path = std::string(getenv("HOME")) + "/" + custom_path;
+            logToFile("Converted to absolute path: " + custom_path);
             
             // Ensure the path ends with index.html if it's a directory
             if (std::filesystem::exists(custom_path) && std::filesystem::is_directory(custom_path)) {
